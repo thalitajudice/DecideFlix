@@ -238,6 +238,138 @@ def deletar_titulo(id):
     return jsonify({"mensagem": "Título removido com sucesso"})
 
 
+@app.route("/titulos/quantidade-por-categoria", methods=["GET"])
+def quantidade_por_categoria():
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$categoria",
+                "quantidade_filmes": {"$sum": 1}
+            }
+        },
+        {
+            "$sort": {"quantidade_filmes": -1}
+        }
+    ]
+
+    resultado = colecao_titulos.aggregate(pipeline)
+
+    resposta = []
+    for item in resultado:
+        resposta.append({
+            "categoria": item["_id"],
+            "quantidade_filmes": item["quantidade_filmes"]
+        })
+
+    return jsonify(resposta)
+
+@app.route("/titulos/decadas", methods=["GET"])
+def filmes_por_decada():
+    pipeline = [
+        {
+            "$addFields": {
+                "decada": {
+                    "$multiply": [
+                        {"$floor": {"$divide": ["$ano", 10]}},
+                        10
+                    ]
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": "$decada",
+                "quantidade_filmes": {"$sum": 1}
+            }
+        },
+        {
+            "$sort": {"_id": 1}
+        }
+    ]
+
+    resultado = list(colecao_titulos.aggregate(pipeline))
+
+    # Formatando saída
+    resposta = [
+        {
+            "decada": doc["_id"],
+            "quantidade_filmes": doc["quantidade_filmes"]
+        }
+        for doc in resultado
+    ]
+
+    return jsonify(resposta)
+
+@app.route("/titulos/sortear", methods=["GET"])
+def sortear_filme():
+    pipeline = [
+        {"$sample": {"size": 1}}
+    ]
+
+    resultado = list(colecao_titulos.aggregate(pipeline))
+
+    if not resultado:
+        return jsonify({"erro": "Nenhum filme encontrado"}), 404
+
+    filme = resultado[0]
+
+    return jsonify({
+        "titulo": filme.get("titulo"),
+        "categoria": filme.get("categoria"),
+        "ano": filme.get("ano")
+    })
+
+@app.route("/titulos/sortear/categoria/<categoria>", methods=["GET"])
+def sortear_por_categoria(categoria):
+    pipeline = [
+        {"$match": {"categoria": categoria}},
+        {"$sample": {"size": 1}}
+    ]
+
+    resultado = list(colecao_titulos.aggregate(pipeline))
+
+    if not resultado:
+        return jsonify({"erro": "Nenhum filme encontrado para essa categoria"}), 404
+
+    filme = resultado[0]
+
+    return jsonify({
+        "titulo": filme.get("titulo"),
+        "categoria": filme.get("categoria"),
+        "ano": filme.get("ano")
+    })
+
+@app.route("/titulos/sortear/decada/<int:decada>", methods=["GET"])
+def sortear_por_decada(decada):
+    pipeline = [
+        {
+            "$addFields": {
+                "decada": {
+                    "$multiply": [
+                        {"$floor": {"$divide": ["$ano", 10]}},
+                        10
+                    ]
+                }
+            }
+        },
+        {"$match": {"decada": decada}},
+        {"$sample": {"size": 1}}
+    ]
+
+    resultado = list(colecao_titulos.aggregate(pipeline))
+
+    if not resultado:
+        return jsonify({"erro": "Nenhum filme encontrado para essa década"}), 404
+
+    filme = resultado[0]
+
+    return jsonify({
+        "titulo": filme.get("titulo"),
+        "categoria": filme.get("categoria"),
+        "ano": filme.get("ano"),
+        "decada": decada
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True)
