@@ -33,6 +33,7 @@ colecao_titulos = db["titulos"]
 def home():
     return "API DecideFlix funcionando"
 
+
 @app.route("/titulos", methods=["GET"])
 def listar_titulos():
     lista = []
@@ -62,6 +63,19 @@ def criar_titulo():
     return jsonify({
         "mensagem": "Título inserido com sucesso!",
         "id": str(resultado.inserted_id)
+    }), 201
+
+@app.route("/titulos/lote", methods=["POST"])
+def criar_titulos_em_lote():
+    dados = request.json  # espera uma lista de objetos
+
+    if not isinstance(dados, list):
+        return jsonify({"erro": "Envie uma lista de títulos"}), 400
+
+    resultado = colecao_titulos.insert_many(dados)
+
+    return jsonify({
+        "mensagem": f"{len(resultado.inserted_ids)} títulos inseridos com sucesso"
     }), 201
 
 @app.route("/titulos/<id>", methods=["GET"])
@@ -109,6 +123,8 @@ def deletar_titulo(id):
         return jsonify({"erro": "Título não encontrado"}), 404
 
     return jsonify({"mensagem": "Título removido com sucesso"})
+
+
 
 
 if __name__ == "__main__":
