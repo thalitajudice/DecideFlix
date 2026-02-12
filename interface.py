@@ -53,17 +53,52 @@ elif menu == "Adicionar Filme":
 # SORTEAR
 # ----------------------------
 elif menu == "Sortear Filme":
-    st.subheader("🎲 Sorteio")
+    st.subheader("🎲 Sorteio de Filmes")
 
-    if st.button("Sortear agora"):
-        response = requests.get(f"{API_URL}/titulos/sortear")
+    # Opção para escolher o tipo de sorteio
+    tipo_sorteio = st.radio(
+        "Como você quer sortear?",
+        ("Sortear qualquer um", "Sortear por Categoria")
+    )
 
-        if response.status_code == 200:
-            filme = response.json()
-            st.success(f"{filme['nome']} ({filme['ano']})")
-            st.write(f"Categoria: {filme['categoria']}")
-        else:
-            st.error("Nenhum filme encontrado")
+    if tipo_sorteio == "Sortear qualquer um":
+        if st.button("Sortear Agora"):
+            try:
+                response = requests.get(f"{API_URL}/titulos/sortear")
+                if response.status_code == 200:
+                    filme = response.json()
+                    st.success(f"🍿 O vencedor é: **{filme['nome']}** ({filme['ano']})")
+                    st.info(f"Categoria: {filme['categoria']}")
+                else:
+                    st.error("Nenhum filme encontrado no banco de dados.")
+            except:
+                st.error("Erro de conexão com a API.")
+
+    elif tipo_sorteio == "Sortear por Categoria":
+        # 1. Busca as categorias existentes para preencher a caixinha
+        try:
+            resp_cat = requests.get(f"{API_URL}/titulos/quantidade-por-categoria")
+            if resp_cat.status_code == 200:
+                dados_cat = resp_cat.json()
+                # Cria uma lista só com os nomes das categorias
+                lista_categorias = [item['categoria'] for item in dados_cat]
+                
+                # 2. Mostra a caixa de seleção
+                categoria_escolhida = st.selectbox("Escolha a categoria:", lista_categorias)
+
+                # 3. Botão de sortear específico
+                if st.button(f"Sortear filme de {categoria_escolhida}"):
+                    response = requests.get(f"{API_URL}/titulos/sortear/categoria/{categoria_escolhida}")
+                    
+                    if response.status_code == 200:
+                        filme = response.json()
+                        st.success(f"🍿 O vencedor de {categoria_escolhida} é: **{filme['nome']}** ({filme['ano']})")
+                    else:
+                        st.warning(f"Não consegui sortear. Talvez não tenha filmes de {categoria_escolhida}?")
+            else:
+                st.error("Erro ao carregar categorias.")
+        except:
+            st.error("Erro de conexão ao buscar categorias.")
 
 # ----------------------------
 # ANALYTICS
