@@ -42,7 +42,7 @@ elif menu == "Adicionar Filme":
             "ano": ano
         }
 
-        response = requests.post(f"response = requests.get("http://127.0.0.1:5000/titulos"), json=data)
+        response = requests.post("http://127.0.0.1:5000/titulos", json=data)
 
         if response.status_code == 201:
             st.success("Filme adicionado com sucesso")
@@ -60,7 +60,7 @@ elif menu == "Sortear Filme":
 
         if response.status_code == 200:
             filme = response.json()
-            st.success(f"{filme['titulo']} ({filme['ano']})")
+            st.success(f"{filme['nome']} ({filme['ano']})")
             st.write(f"Categoria: {filme['categoria']}")
         else:
             st.error("Nenhum filme encontrado")
