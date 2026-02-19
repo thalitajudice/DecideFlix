@@ -26,6 +26,26 @@ db = client["decideflix"]
 colecao_titulos = db["titulos"]
 
 
+# =========================
+# INDICES
+# =========================
+
+
+colecao_titulos.create_index("ano")
+
+@app.route("/titulos/ano/<int:ano>", methods=["GET"])
+def buscar_por_ano(ano):
+    filmes = list(colecao_titulos.find({"ano": ano}))
+
+    resposta = [{
+        "id": str(f["_id"]),
+        "nome": f["nome"],
+        "categoria": f["categoria"],
+        "ano": f["ano"]
+    } for f in filmes]
+
+    return jsonify(resposta)
+
 @app.route("/")
 def home():
     return "API DecideFlix funcionando"
@@ -149,21 +169,26 @@ def quantidade_por_categoria():
         {
             "$group": {
                 "_id": "$categoria",
-                "quantidade_filmes": {"$sum": 1}
+                "quantidade_filmes": {"$sum": 1},
+                "filmes": {"$push": "$nome"}
             }
         },
         {"$sort": {"quantidade_filmes": -1}}
     ]
 
-    resultado = colecao_titulos.aggregate(pipeline)
+    resultado = list(colecao_titulos.aggregate(pipeline))
+
+
 
     resposta = [
-        {
-            "categoria": item["_id"],
-            "quantidade_filmes": item["quantidade_filmes"]
-        }
-        for item in resultado
-    ]
+    {
+        "categoria": item["_id"],
+        "quantidade_filmes": item["quantidade_filmes"],
+        "filmes": item["filmes"]
+    }
+    for item in resultado
+]
+
 
     return jsonify(resposta)
 
@@ -184,7 +209,9 @@ def filmes_por_decada():
         {
             "$group": {
                 "_id": "$decada",
-                "quantidade_filmes": {"$sum": 1}
+                "quantidade_filmes": {"$sum": 1},
+                "filmes": {"$push": {"nome": "$nome", "ano": "$ano"}}
+
             }
         },
         {"$sort": {"_id": 1}}
@@ -195,7 +222,9 @@ def filmes_por_decada():
     resposta = [
         {
             "decada": doc["_id"],
-            "quantidade_filmes": doc["quantidade_filmes"]
+            "quantidade_filmes": doc["quantidade_filmes"],
+            "filmes": doc["filmes"]
+
         }
         for doc in resultado
     ]
