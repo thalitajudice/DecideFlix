@@ -48,7 +48,7 @@ elif menu == "Adicionar Filme":
             st.success("Filme adicionado com sucesso")
         else:
             st.error("Erro ao adicionar filme")
-            
+
 
 # ----------------------------
 # BUSCAS (ÍNDICES)
@@ -167,12 +167,32 @@ elif menu == "Sortear Filme":
 # ----------------------------
 # ANALYTICS
 # ----------------------------
+
 elif menu == "Analytics":
-    st.subheader("Quantidade por Categoria")
+    st.subheader("📊 Analytics do DecideFlix")
 
-    response = requests.get(f"{API_URL}/titulos/quantidade-por-categoria")
+    # Criamos duas abas para organizar os dados
+    aba_categoria, aba_decada = st.tabs(["Por Categoria", "Por Década"])
 
-    if response.status_code == 200:
-        dados = response.json()
-        for item in dados:
-            st.write(f"{item['categoria']}: {item['quantidade_filmes']}")
+    # --- ABA 1: O que você já tinha feito ---
+    with aba_categoria:
+        response = requests.get(f"{API_URL}/titulos/quantidade-por-categoria")
+        if response.status_code == 200:
+            dados = response.json()
+            for item in dados:
+                st.write(f"**{item['categoria']}**: {item['quantidade_filmes']} filme(s)")
+
+    # --- ABA 2: Usando a matemática das Décadas ---
+    with aba_decada:
+        st.info("O banco de dados (MongoDB) calcula a década matematicamente e agrupa os filmes!")
+        response_decada = requests.get(f"{API_URL}/titulos/decadas")
+        
+        if response_decada.status_code == 200:
+            dados_decada = response_decada.json()
+            for item in dados_decada:
+                # O int() é só para garantir que apareça "1990" e não "1990.0"
+                st.write(f"📼 **Anos {int(item['decada'])}**: {item['quantidade_filmes']} filme(s)")
+                
+                # Mostra o nome dos filmes que pertencem a essa década
+                nomes = [f"{filme['nome']} ({filme['ano']})" for filme in item['filmes']]
+                st.caption(f"Filmes: {', '.join(nomes)}")
