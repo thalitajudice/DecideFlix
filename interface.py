@@ -144,14 +144,17 @@ elif menu == "Sortear Filme":
             resp_cat = requests.get(f"{API_URL}/titulos/quantidade-por-categoria")
             if resp_cat.status_code == 200:
                 dados_cat = resp_cat.json()
-                # Cria uma lista só com os nomes das categorias
                 lista_categorias = [item['categoria'] for item in dados_cat]
                 
-                # 2. Mostra a caixa de seleção
-                categoria_escolhida = st.selectbox("Escolha a categoria:", lista_categorias)
+                # 2. Mostra a caixa de seleção COM UMA KEY PARA SALVAR O ESTADO
+                categoria_escolhida = st.selectbox(
+                    "Escolha a categoria:", 
+                    lista_categorias, 
+                    key="caixa_categoria_sorteio"
+                )
 
-                # 3. Botão de sortear específico
-                if st.button(f"Sortear filme de {categoria_escolhida}"):
+                # 3. Botão com NOME FIXO
+                if st.button("🎲 Sortear Filme Desta Categoria"):
                     response = requests.get(f"{API_URL}/titulos/sortear/categoria/{categoria_escolhida}")
                     
                     if response.status_code == 200:
@@ -174,13 +177,17 @@ elif menu == "Analytics":
     # Criamos duas abas para organizar os dados
     aba_categoria, aba_decada = st.tabs(["Por Categoria", "Por Década"])
 
-    # --- ABA 1: O que você já tinha feito ---
+    # --- ABA 1: Por Categoria ---
     with aba_categoria:
         response = requests.get(f"{API_URL}/titulos/quantidade-por-categoria")
         if response.status_code == 200:
             dados = response.json()
             for item in dados:
                 st.write(f"**{item['categoria']}**: {item['quantidade_filmes']} filme(s)")
+                
+                # Junta os nomes da lista com vírgulas e exibe em texto menor
+                nomes_filmes = ", ".join(item['filmes'])
+                st.caption(f"Filmes: {nomes_filmes}")
 
     # --- ABA 2: Usando a matemática das Décadas ---
     with aba_decada:

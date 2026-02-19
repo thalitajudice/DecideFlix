@@ -340,15 +340,16 @@ def sortear_filme():
 
 @app.route("/titulos/sortear/categoria/<categoria>", methods=["GET"])
 def sortear_por_categoria(categoria):
+    # O $regex busca palavras parecidas e o $options: "i" manda ignorar maiúsculas/minúsculas
     pipeline = [
-        {"$match": {"categoria": categoria}},
+        {"$match": {"categoria": {"$regex": categoria, "$options": "i"}}},
         {"$sample": {"size": 1}}
     ]
 
     resultado = list(colecao_titulos.aggregate(pipeline))
 
     if not resultado:
-        return jsonify({"erro": "Nenhum filme encontrado para essa categoria"}), 404
+        return jsonify({"erro": f"Nenhum filme encontrado para a categoria: {categoria}"}), 404
 
     filme = resultado[0]
 
