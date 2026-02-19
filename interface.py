@@ -7,7 +7,7 @@ st.title("🎬 DecideFlix")
 
 menu = st.sidebar.selectbox(
     "Menu",
-    ["Listar Filmes", "Adicionar Filme", "Sortear Filme", "Analytics"]
+    ["Listar Filmes", "Adicionar Filme", "Buscar (Índices)", "Sortear Filme", "Analytics"]
 )
 
 # ----------------------------
@@ -48,6 +48,70 @@ elif menu == "Adicionar Filme":
             st.success("Filme adicionado com sucesso")
         else:
             st.error("Erro ao adicionar filme")
+            
+
+# ----------------------------
+# BUSCAS (ÍNDICES)
+# ----------------------------
+elif menu == "Buscar (Índices)":
+    st.subheader("🔎 Busca Otimizada com Índices")
+    
+    # Abas (Tabs) para deixar a interface bonita e organizada
+    aba_simples, aba_texto, aba_geo = st.tabs(["Simples (Categoria)", "Texto (Nome)", "Geoespacial (Mapa)"])
+    
+    # --- ABA 1: ÍNDICE SIMPLES ---
+    with aba_simples:
+        st.info("Utiliza o índice ASCENDING no campo 'categoria'. O banco vai direto na 'letra' certa.")
+        categoria = st.text_input("Digite a categoria (ex: Ação, Drama, Animação):")
+        
+        if st.button("Buscar por Categoria"):
+            response = requests.get(f"{API_URL}/busca/simples?categoria={categoria}")
+            if response.status_code == 200:
+                dados = response.json()
+                st.success(f"Encontrados {dados['quantidade']} filmes!")
+                for f in dados['resultados']:
+                    st.write(f"- **{f['nome']}** ({f['categoria']})")
+            else:
+                st.error("Erro na busca. Verifique se a API está rodando.")
+
+    # --- ABA 2: ÍNDICE DE TEXTO ---
+    with aba_texto:
+        st.info("Utiliza o índice TEXT no campo 'nome'. Busca palavras dentro do texto e ordena por relevância.")
+        termo = st.text_input("Digite uma palavra do título (ex: Senhor, Volta, Matrix):")
+        
+        if st.button("Buscar por Texto"):
+            response = requests.get(f"{API_URL}/busca/texto?q={termo}")
+            if response.status_code == 200:
+                dados = response.json()
+                st.success(f"Encontrados {dados['quantidade']} filmes!")
+                for f in dados['resultados']:
+                    st.write(f"- **{f['nome']}** (Relevância: {f['score_relevancia']:.2f})")
+            else:
+                st.error("Erro na busca.")
+
+    # --- ABA 3: ÍNDICE GEOESPACIAL ---
+    with aba_geo:
+        st.info("Utiliza o índice GEOSPHERE com operador $near. Encontra filmes gravados em um raio de distância!")
+        
+        # Coordenadas de Uberlândia como padrão para facilitar o teste
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            lat = st.number_input("Latitude", value=-18.9186, format="%.4f")
+        with col2:
+            lng = st.number_input("Longitude", value=-48.2772, format="%.4f")
+        with col3:
+            dist = st.number_input("Distância (Metros)", value=500000, step=50000) # Padrão: 500km
+            
+        if st.button("Buscar por Proximidade"):
+            response = requests.get(f"{API_URL}/busca/geo?lat={lat}&lng={lng}&dist={dist}")
+            if response.status_code == 200:
+                dados = response.json()
+                st.success(f"Encontrados {dados['quantidade']} filmes num raio de {dist/1000}km!")
+                for f in dados['resultados']:
+                    st.write(f"- **{f['nome']}**")
+                    st.caption(f"Coordenadas: {f['coordenadas']}")
+            else:
+                st.error("Erro na busca.")
 
 # ----------------------------
 # SORTEAR

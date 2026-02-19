@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING, TEXT, GEOSPHERE
 from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
@@ -31,20 +31,95 @@ colecao_titulos = db["titulos"]
 # =========================
 
 
-colecao_titulos.create_index("ano")
+@app.route("/indices/criar", methods=["POST"])
+def criar_indices():
+    try:
+        # 1. Índice Simples (Campo: categoria, Ordem: Crescente)
+        colecao_titulos.create_index([("categoria", ASCENDING)])
+        
+        # 2. Índice de Texto (Campo: nome) - Permite busca por palavras
+        colecao_titulos.create_index([("nome", TEXT)])
+        
+        # 3. Índice Geoespacial (Campo: localizacao) - Permite busca por mapa/distância
+        colecao_titulos.create_index([("localizacao", GEOSPHERE)])
+        
+        return jsonify({"mensagem": "Todos os índices foram criados com sucesso no MongoDB!"}), 201
+    except Exception as e:
+        return jsonify({"erro": f"Falha ao criar índices: {e}"}), 500
 
-@app.route("/titulos/ano/<int:ano>", methods=["GET"])
-def buscar_por_ano(ano):
-    filmes = list(colecao_titulos.find({"ano": ano}))
+# === 1. TESTANDO O ÍNDICE SIMPLES ===
+@app.route("/busca/simples", methods=["GET"])
+def testar_indice_simples():
+    # Pega a categoria que o usuário digitar na URL
+    categoria_buscada = request.args.get("categoria")
+    
+    if not categoria_buscada:
+        return jsonify({"erro": "Envie a categoria. Ex: /busca/simples?categoria=Ação"}), 400
 
+    # O MongoDB percebe sozinho que existe um índice em 'categoria' e usa ele
+    filmes = list(colecao_titulos.find({"categoria": categoria_buscada}))
+    
+    # Formatando a resposta igual você já faz no seu código
+    resposta = [{"id": str(f["_id"]), "nome": f["nome"], "categoria": f["categoria"]} for f in filmes]
+    
+    return jsonify({"quantidade": len(resposta), "resultados": resposta})
+
+
+# === 2. TESTANDO O ÍNDICE DE TEXTO ===
+@app.route("/busca/texto", methods=["GET"])
+def testar_indice_texto():
+    # Pega a palavra que o usuário quer pesquisar na URL
+    termo = request.args.get("q")
+    
+    if not termo:
+        return jsonify({"erro": "Envie o termo. Ex: /busca/texto?q=Matrix"}), 400
+
+    # O operador $text só funciona porque criamos o índice TEXT no campo 'nome'
+    filmes = list(colecao_titulos.find(
+        {"$text": {"$search": termo}},
+        {"score": {"$meta": "textScore"}} # Isso traz uma nota de relevância da pesquisa
+    ).sort([("score", {"$meta": "textScore"})])) # Ordena do mais relevante para o menos
+    
+    resposta = [{"id": str(f["_id"]), "nome": f["nome"], "score_relevancia": f.get("score")} for f in filmes]
+    
+    return jsonify({"quantidade": len(resposta), "resultados": resposta})
+
+
+# === 3. TESTANDO O ÍNDICE GEOESPACIAL 2D ===
+@app.route("/busca/geo", methods=["GET"])
+def testar_indice_geo():
+    try:
+        # Pega a latitude, longitude e a distância máxima (em metros) da URL
+        lat = float(request.args.get("lat"))
+        lng = float(request.args.get("lng"))
+        distancia = int(request.args.get("dist", 500000)) # Padrão: 500.000 metros (500km)
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Envie lat e lng. Ex: /busca/geo?lat=-23.55&lng=-46.63"}), 400
+
+    
+
+    # O operador $near traça um raio a partir do ponto e acha o que tem dentro
+    query = {
+        "localizacao": {
+            "$near": {
+                "$geometry": {
+                    "type": "Point",
+                    "coordinates": [lng, lat] # ATENÇÃO: MongoDB usa Longitude primeiro, depois Latitude
+                },
+                "$maxDistance": distancia
+            }
+        }
+    }
+
+    filmes = list(colecao_titulos.find(query))
+    
     resposta = [{
-        "id": str(f["_id"]),
-        "nome": f["nome"],
-        "categoria": f["categoria"],
-        "ano": f["ano"]
+        "id": str(f["_id"]), 
+        "nome": f["nome"], 
+        "coordenadas": f["localizacao"]["coordinates"]
     } for f in filmes]
-
-    return jsonify(resposta)
+    
+    return jsonify({"quantidade": len(resposta), "resultados": resposta})
 
 @app.route("/")
 def home():
@@ -157,6 +232,15 @@ def deletar_titulo(id):
         return jsonify({"erro": "Título não encontrado"}), 404
 
     return jsonify({"mensagem": "Título removido com sucesso"})
+
+@app.route("/titulos/limpar", methods=["DELETE"])
+def limpar_banco():
+    """Rota temporária para apagar todos os documentos e resetar o banco"""
+    resultado = colecao_titulos.delete_many({}) # O {} vazio significa "apagar tudo"
+    
+    return jsonify({
+        "mensagem": f"Faxina concluída! {resultado.deleted_count} filmes foram apagados."
+    }), 200
 
 
 # =========================
