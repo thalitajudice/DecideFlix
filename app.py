@@ -4,6 +4,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 import os
+import redis 
 
 app = Flask(__name__)
 
@@ -391,6 +392,88 @@ def sortear_por_decada(decada):
         "decada": decada
     })
 
+# =========================
+# CONEXÃO REDIS (Nuvem - Decide Flix)
+# =========================
+redis_host = os.getenv("REDIS_HOST")
+redis_port = int(os.getenv("REDIS_PORT", 13499))
+redis_username = os.getenv("REDIS_USERNAME", "default")
+redis_password = os.getenv("REDIS_PASSWORD")
+
+try:
+    redis_client = redis.Redis(
+        host=redis_host, 
+        port=redis_port, 
+        username=redis_username,
+        password=redis_password,
+        decode_responses=True
+    )
+    redis_client.ping()
+    print("Redis na nuvem conectado com sucesso! 🚀")
+except Exception as e:
+    print(f"Aviso: Erro ao conectar no Redis: {e}")
+
+# =========================
+# REDIS - BITMAP (Mapa de Bits)
+# =========================
+# O Bitmap é ideal para sim/não. Ex: Usuário assistiu a este filme?
+
+
+@app.route("/usuarios/<int:user_id>/assistiu/<int:filme_num_id>", methods=["POST"])
+def marcar_assistido(user_id, filme_num_id):
+    chave = f"usuario:{user_id}:assistidos"
+    redis_client.setbit(chave, filme_num_id, 1)
+    return jsonify({"mensagem": f"Filme {filme_num_id} marcado como assistido pelo usuário {user_id}"}), 200
+
+@app.route("/usuarios/<int:user_id>/assistiu/<int:filme_num_id>", methods=["GET"])
+def verificar_assistido(user_id, filme_num_id):
+    chave = f"usuario:{user_id}:assistidos"
+    assistiu = redis_client.getbit(chave, filme_num_id)
+    return jsonify({"user_id": user_id, "filme_num_id": filme_num_id, "assistiu": bool(assistiu)}), 200
+
+
+# =========================
+# REDIS - BLOOM FILTER
+# =========================
+# O Bloom Filter verifica se um item já existe num conjunto gigante sem gastar memória.
+
+
+@app.route("/usuarios/<int:user_id>/rejeitar/<filme_id>", methods=["POST"])
+def rejeitar_filme(user_id, filme_id):
+    chave = f"usuario:{user_id}:rejeitados"
+    try:
+        redis_client.execute_command("BF.ADD", chave, str(filme_id))
+        return jsonify({"mensagem": f"Filme {filme_id} rejeitado com sucesso!"}), 200
+    except Exception as e:
+        return jsonify({"erro": f"Erro (O RedisBloom está ativado no servidor?): {e}"}), 500
+
+@app.route("/usuarios/<int:user_id>/rejeitar/<filme_id>", methods=["GET"])
+def checar_rejeitado(user_id, filme_id):
+    chave = f"usuario:{user_id}:rejeitados"
+    try:
+        existe = redis_client.execute_command("BF.EXISTS", chave, str(filme_id))
+        return jsonify({"filme_id": filme_id, "status": "Possivelmente rejeitado" if existe else "Definitivamente não rejeitado"}), 200
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+# =========================
+# REDIS - HYPERLOGLOG
+# =========================
+# O HyperLogLog conta itens únicos (como visualizações) com precisão e usando no máximo 12KB.
+
+
+@app.route("/titulos/<filme_id>/view/<int:user_id>", methods=["POST"])
+def registrar_view_unica(filme_id, user_id):
+    chave = f"filme:{filme_id}:views_unicas"
+    redis_client.pfadd(chave, user_id)
+    return jsonify({"mensagem": "Visualização única registrada com sucesso"}), 200
+
+@app.route("/titulos/<filme_id>/views", methods=["GET"])
+def contar_views_unicas(filme_id):
+    chave = f"filme:{filme_id}:views_unicas"
+    total_views = redis_client.pfcount(chave)
+    return jsonify({"filme_id": filme_id, "visualizacoes_unicas": total_views}), 200
 
 if __name__ == "__main__":
     app.run(debug=True)
